@@ -16,34 +16,20 @@ usage: nixy <command> [options]
 These are some common commands for the Nix package management system:
 
 Search for packages
-  list    List installed packages based on package names
-  search  Search available packages based on package names
+  list    Search installed package names using basic regular expressions
+  search  Search available package names using basic regular expressions
 
 Installing packages
-  install  Install packages into the store and the current profile
+  install  Install packages into the nix store and add them to the current profile
   remove   Remove packages from the current profile
 
 Updating packages
   update   Update list of available packages
-  upgrade  Upgrade packages in the current profile
-
-Managing profiles
-  list-profiles   List available profiles
-  switch-profile  Switch to a different profile
-  delete-profile  Delete a profile
-  create-profile  Create a new profile
-
-Managing generations
-  list-generations   List all generations of the current profile
-  switch-generation  Switch to another generation of the current profile
-  delete-generation  Delete a generation
-  rollback           Switch to the previous generation
-  garbage-collect    Removes packages that aren't used by any generation
+  upgrade  Install upgraded packages in to the nix store and replace them to the current profile
 
 EOF
 }
 
-# {- query -}
 # Search for packages using regular expressions.
 # Arguments:
 #   A list of arguments to pass to $(nix-env -q).
@@ -55,7 +41,6 @@ query()
   nix-env -qa "$@"
 }
 
-# {- install -}
 # Installs packages to the Nix store and adds them to the current profile.
 # Arguments:
 #   A list of arguments to pass to $(nix-env -i).
@@ -118,167 +103,26 @@ upgrade()
   fi
 }
 
-# List all the available profiles in the nix store.
-# TODO(nixy): Ideally this would format output identical to list-generations
-# Arguments:
-#   None
-# Returns:
-#   A list of available profiles
-list_profiles()
-{
-  # TODO: Clean up error handling
-  if [ "$#" -gt 0 ]; then
-	  echo -e "\e[1;31merror:\e[0m no arguments expected"
-	  exit 1
-  fi
-
-  local profile
-
-  for profile in /nix/var/nix/profiles/*; do
-    profile=$(basename "${profile}")
-    if [ "${profile}" != per-user ]; then
-      # Ignore profile generations
-      grep -v '\-[0-9]*-link' <<< $profile
-    fi
-  done
-}
-
-# Creates a new profile by installing the minimal set of packages to have a
-# working nix environment.
-# TODO(nixy): Once nixy is a nix expression it should be added to $packages
-# Arguments:
-#   The name of the profile to create
-# Returns:
-#   A message confirming the creation of the profile
-create_profile()
-{
-  local packages="nix"
-  if [ "$(uname -s).$(uname -m)" = "Darwin.x86_64" ]; then
-    packages+=" nss-cacert" # Add SSL certs for Darwin
-  fi
-
-  if [ -n "$1" ] \
-  && [ ! -d /nix/var/nix/profiles/"$1" ]; then
-    echo "creating profile $1"
-    nix-env -i ${packages} -p /nix/var/nix/profiles/"$1" 2> /dev/null
-  fi
-}
-
-# Deletes a profile by deleting all generations of its profile in the nix store.
-# TODO(nixy): This should probably have some sort of prompt or warning
-# Arguments:
-#   The name of the profile to delete
-# Returns:
-#   A message confirming the deletion of the profile
-delete_profile()
-{
-  local current=$(basename $(readlink ~/.nix-profile))
-
-  # Input validation. Don't delete the default or current profile.
-  if [ "$1" != "default" ] \
-  && [ "$1" != "${current}" ] \
-  && [ -n "$1" ] \
-  && [ -d /nix/var/nix/profiles/"$1" ]; then
-    echo "deleting profile $1"
-    rm -rf /nix/var/nix/profiles/"$1"{,-*([0-9])-link}
-  fi
-}
-
-# Switches profiles
-# Arguments:
-#   The name of the profile to switch to
-# Returns:
-#   A message confirming the profile switch
-switch_profile()
-{
-  local current=$(basename $(readlink ~/.nix-profile))
-
-  if [ -d /nix/var/nix/profiles/"$1" ] \
-  && [ "$1" != "${current}" ]; then
-    echo "switching profiles from ${current} to $1"
-    nix-env --switch-profile /nix/var/nix/profiles/"$1"
-  fi
-}
-
-# Lists all generations of the current profile
-# All input validation is handled by $(nix-env --list-generations)
-# Arguments:
-#   TODO(nixy): Fill in arguments
-# Returns:
-#   TODO(nixy): Fill in return value
-list_generations()
-{
-  nix-env --list-generations
-}
-
-# Switches to another generation of the current profile
-# All input validation is handled by $(nix-env --switch-generations)
-# Arguments:
-#   TODO(nixy): fill in arguments
-# Returns:
-#   TODO(nixy): fill in return value
-switch_generation()
-{
-  nix-env --switch-generation "$@"
-}
-
-delete_generation()
-{
-  nix-env --delete-generations "$@"
-}
-
-# Switches to previous generation of the current profile
-# Arguments:
-#   TODO(nixy): fill in arguments
-# Returns:
-#   TODO(nixy): fill in return value
-rollback_generation()
-{
-  nix-env --rollback "$@"
-}
-
-# Removes all old generations of profiles and all packages that aren't
-# in a profile.
-# Arguments:
-#   A list of arguments to pass to $(nix-collect-garbage) in no particular order.
-# Returns:
-#   The unmodified output of nix-collect-garbage
-garbage_collection()
-{
-  nix-collect-garbage "$@"
-}
-
 main()
 {
   if [ $# -eq 0 ]; then
     help
   else
-    command=$1; shift
-    arguments="$@"
+    cmd="$1"; shift
 
-    case "$command" in
-      list) query --installed $arguments;;
-      search) query $arguments;;
+    case "$cmd" in
+      list) query --installed "$@";;
+      search) query "$@";;
 
-      install) install $arguments;;
-      remove) remove $arguments;;
+      install) install "$@";;
+      remove) remove "$@";;
 
-      update) update $arguments;;
-      upgrade) upgrade $arguments;;
+      update) update "$@";;
+      upgrade) upgrade "$@";;
 
-      list-profiles) list_profiles $arguments;;
-      create-profile) create_profile $arguments;;
-      delete-profile) delete_profile $arguments;;
-      switch-profile) switch_profile $arguments;;
-
-      list-generations) list_generations $arguments;;
-      switch-generation) switch_generation $arguments;;
-      rollback) rollback_generation $arguments;;
-      garbage-collect) garbage_collection $arguments;;
-      
       -h|--help|help) help;;
 
-      *) echo -en '\e[1;31merror:\e[0m '; echo "invalid operation $command"
+      *) echo -en '\e[1;31merror:\e[0m '; echo "invalid operation $cmd"
     esac
   fi
 }
