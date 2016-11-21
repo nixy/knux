@@ -1,0 +1,457 @@
+#!/usr/bin/env bash
+
+help="usage: nixy command [options]... [arguments]...
+
+CLI for the Nix package manager.
+
+Basic commands:
+  list - list packages based on package names
+
+  install - installs a package into the store and the current profile
+  remove  - removes a package from the current profile  
+
+  update  - fetch the latest nix expression updating the list of packages
+  upgrade - installs newer versions of packages into the current profile
+
+  garbage-collect - removes old packages no longer referenced by active profiles
+"
+
+modules="$modules core"
+commands="$commands
+          list
+	  search->list
+	  install
+	  remove
+	  update
+	  upgrade
+	  garbage-collect->garbage_collect
+	  help"
+default_command="help"
+
+help()
+{
+  echo "${help}"
+  exit 0
+}
+
+# Searches packages using basic regular expressions.
+# Arguments: A list of basic regular expressions to search package names with.
+# Effects:   None
+# Returns:   A list of package names that matched the regular expression.
+list()
+{
+  if [ -t 1 ]; then
+    echo "listing..." >&2
+  fi
+  PAGER="" nix-env -qa "${@}";
+}
+
+# Install packages into the current profile.
+# Arguments: A list of package names to install. If no package names are given,
+#            then no packages are installed.
+# Effects:   Installs the packages into the Nix store and adds them to the
+#            current profile.
+# Returns:   Progress information on the installation and confirmation of
+#            package installation.
+install()
+{
+  if [ -t 1 ]; then
+    echo "searching..." >&2
+  fi
+
+  if [ ${#} -gt 0 ]; then
+    nix-env -Qi "${@}"
+  fi
+}
+
+# Removes packages from the current profile.
+# Arguments: A list of package names to remove. If no package names are given,
+#            then no packages are removed.
+# Effects:   Removes packages from the current profile while leaving them
+#            intact in the Nix store.
+# Returns:   Confirmation of package removal.
+remove()
+{
+  if [ -t 1 ]; then
+    echo "searching..." >&2
+  fi
+
+  #TODO
+  if [ ${#} -gt 0 ]; then
+    output=$(nix-env -e "${@}" 2>&1)
+    if [ -n "${output}" ] && [ "${output}" != "(dry run; not doing anything)" ]; then
+      echo "${output}"
+    else
+      if [ "${output}" = "(dry run; not doing anything)" ];then
+	echo "${output}" >&2
+      fi
+      echo -e '\033[1;31merror:\033[0m no matches found'
+      exit 1
+    fi
+  fi
+}
+
+# Updates the list of available packages.
+# Arguments: A list of nix-channels to update. If no channels are given, then
+#            all channels are updated.
+# Effects:   None
+# Returns:   Information on the nix expression being downloaded.
+update()
+{
+  if [ ${#} -gt 0 ]; then
+    nix-channel --update "${@}" 
+  else
+    nix-channel --update
+  fi
+}
+
+# Upgrades packages in the current profile.
+# Arguments: A list of package names to upgrade. If no package names are given,
+#            then upgrade all packages in the current profile.
+# Effects:   Install the upgraded package in the nix store and replaces the
+#            package in the current profile.
+# Returns:
+upgrade()
+{
+  if [ -t 1 ]; then
+    echo "searching..." >&2
+  fi
+
+  if [ ${#} -gt 0 ]; then
+    nix-env -Qu "${@}" 
+  else
+    nix-env -Qu
+  fi
+}
+
+# Removes packages with no active references in any generation or profile.
+# Arguments: A list of package names to upgrade. If no package names are given,
+#            then upgrade all packages in the current profile.
+# Effects:   Purges packages with no active references to them. Depending on the
+#            flags provided this may also remove old generations before purging
+#            packages.
+# Returns:   Progress information on the purge  and confirmation of package
+#            deletion.
+garbage_collect()
+{
+  nix-collect-garbage "$@"
+}
+
+
+modules="$modules extra"
+commands="$commands profile generation"
+
+shopt -s extglob
+
+#TODO
+profile()
+{
+  commands="list->profile_list
+            create->profile_create
+	    delete->profile_delete
+	    switch->profile_switch"
+  flags=""
+  default_command="profile_help"
+  process "$@"
+}
+
+profile_help()
+{
+cat << EOF
+usage: nixy profile (lsit|create|delete|switch) [options]... [argument]
+
+These are some common Nix commands used to manipulate user profiles:
+
+
+EOF
+}
+
+profile_list()
+{
+  # if [ "${#}" -gt 0 ]; then
+  #   echo -e "\e[1;31merror:\e[0m no arguments expected"
+  #   exit 1
+  # fi
+  
+  for profile in /nix/var/nix/profiles/*; do
+    profile=$(basename "${profile}")
+    if [ "${profile}" != "per-user" ] && [ "${profile}" != "system" ]; then
+      # Ignore profile generations
+      if grep -qv '\-[0-9]*-link' <<< $profile; then
+	echo " "${profile}
+      fi
+    fi
+  done; unset profile
+
+  for profile in /nix/var/nix/profiles/per-user/"${USER}"/*; do
+    profile=$(basename "${profile}")
+    if grep -qv '\-[0-9]*-link' <<< $profile; then
+      echo " "${profile}
+    fi
+  done; unset profile
+}
+
+profile_create()
+{
+  packages="nix"
+  if [ "$(uname -s).$(uname -m)" = "Darwin.x86_64" ]; then
+    packages="${packages} nss-cacert" # Add SSL certs for Darwin
+  fi
+
+  if [ -n "${1}" ] \
+  && [ ! -d /nix/var/nix/profiles/"${1}" ]; then
+    echo "creating profile ${1}"
+    nix-env -i ${packages} -p /nix/var/nix/profiles/"${1}" 2> /dev/null
+  fi
+  unset packages
+}
+
+profile_delete()
+{
+  current=$(basename $(readlink ~/.nix-profile))
+
+  # Input validation. Don't delete the default or current profile.
+  if [ "${1}" != "default" ] \
+  && [ "${1}" != "${current}" ] \
+  && [ -n "${1}" ] \
+  && [ -d /nix/var/nix/profiles/"${1}" ]; then
+    echo "deleting profile ${1}"
+    rm -rf /nix/var/nix/profiles/"${1}"{,-*([0-9])-link}
+  fi
+}
+
+profile_switch()
+{
+  current=$(basename $(readlink ~/.nix-profile))
+
+  if [ -n "${1}" ] \
+  && [ "${1}" != "${current}" ] \
+  && [ -d /nix/var/nix/profiles/"${1}" ]; then
+    echo "switching profiles from ${current} to ${1}"
+    nix-env --switch-profile /nix/var/nix/profiles/"${1}"
+  fi
+  unset current
+}
+
+
+# Modules
+#   Profiles
+#   Generations
+#   Store
+#   Development
+
+
+# Managing profiles
+#   list-profiles   List available profiles
+#   switch-profile  Switch to a different profile
+#   delete-profile  Delete a profile
+#   create-profile  Create a new profile
+
+# Managing generations
+#   list-generations   List all generations of the current profile
+#   switch-generation  Switch to another generation of the current profile
+#   delete-generation  Delete a generation
+#   rollback           Switch to the previous generation
+#   garbage-collect    Removes packages that aren't used by any generation
+
+
+generation()
+{
+  commands="list->generation_list
+            rollback->generation_rollback
+	    delete->generation_delete
+	    switch->generation_switch"
+  flags=""
+  default_command="generation_help"
+  process "$@"
+}
+
+
+# Lists all generations of the current profile
+# All input validation is handled by $(nix-env --list-generations)
+# Arguments: None
+# Returns:   A listing of all generations of the current profile.
+generation_list()
+{
+  nix-env --list-generations
+}
+
+# Switches to another generation of the current profile
+# All input validation is handled by $(nix-env --switch-generations)
+# Arguments: The number of the generation to switch to.
+# Returns:   A message confirming the switch.
+generation_switch()
+{
+  nix-env --switch-generation "$@"
+}
+
+# Deletes a generation of the current profile
+# All input validation is handled by $(nix-env --delete-generations)
+# Arguments: The number of the generation to delete.
+# Returns:   A message confirming the deletion.
+generation_delete()
+{
+  nix-env --delete-generations "$@"
+}
+
+# Switches to previous generation of the current profile
+# Arguments: None
+# Returns:   A message confirming the switch.
+generation_rollback()
+{
+  nix-env --rollback
+}
+
+
+      # list-profiles) list_profiles "$@";;
+      # create-profile) create_profile "$@";;
+      # delete-profile) delete_profile "$@";;
+      # switch-profile) switch_profile "$@";;
+
+      # list-generations) list_generations "$@";;
+      # delete-generation) delete_generation "$@";;
+      # switch-generation) switch_generation "$@";;
+      # rollback) rollback_generation "$@";;
+      # garbage-collect) garbage_collection "$@";;
+      
+
+
+modules="${modules} python"
+commands="${commands} python python2 python3"
+
+python()
+{
+  python2 "${@}"
+}
+
+python2()
+{
+  commands="list->python2_list
+            shell->python2_shell"
+  flags=""
+  default_commands=""
+  process "${@}"
+}
+
+python3()
+{
+  commands="list->python3_list
+            shell->python3_shell"
+  flags=""
+  default_command=""
+  process "${@}"
+}
+
+python_list()
+{
+  python_version="${1}"; shift
+  list -f "<nixpkgs>" -A "${python_version}" "$@"
+  unset python_version
+}
+
+python2_list()
+{
+  python_list "python2Packages" "${@}"
+}
+
+python3_list()
+{
+  python_list "python3Packages" "${@}"
+}
+
+python_shell()
+{
+  python_version="${1}"; shift
+
+  #TODO: Sloppy but POSIX
+  for arg in "${@}"; do
+    args="${python_version}.${arg} ${args}"
+  done; unset arg
+
+  nix-shell --run "python3" -p $args
+  unset args python_version
+}
+
+python2_shell()
+{
+  python_shell "python2Packages" "${@}"
+}
+
+python3_shell()
+{
+  python_shell "python2Packages" "${@}"
+}
+
+modules="${modules}
+         development"
+commands="${commands}
+          build
+          shell"
+flags="${flags}"
+
+build()
+{
+  nix-build "${@}"
+}
+
+shell()
+{
+  nix-shell  "${@}"
+}
+
+is_valid_command()
+{
+  for valid_command in ${commands}; do
+    if [ "${1}" = "${valid_command%->*}" ]; then
+      echo "${valid_command#*->}"
+      return 0
+    fi
+  done; unset valid_command
+  return 1
+}
+
+is_valid_flag()
+{
+  for valid_flag in ${flags}; do
+    if [ "${1}" = "${valid_flag%->*}" ]; then
+      echo "${valid_flag#*->}"
+      return 0
+    fi
+  done; unset valid_flag
+  return 1
+}
+
+#TODO: Posix Shell compliance
+process()
+{
+  command=""
+  declare -a arguments=()
+  # arguments=""
+
+  if [ "$#" -eq 0 ]; then
+    "${default_command:-:}"
+    return
+  fi
+
+  for argument in "$@"; do
+    if ! [ "$command" ] \
+    && test=$(is_valid_command "$argument"); then
+      command="${test}"
+    elif is_valid_flag "$argument"; then
+      "$argument"
+    else
+      arguments+=("$argument")
+    fi; unset test
+  done; unset argument
+
+  if [ "$command" ]; then
+    "$command" "${arguments[@]}"
+    # "${command}" ${arguments}
+    return
+  else
+    "${default_command:-:}"
+    return
+  fi
+}
+
+process "$@"

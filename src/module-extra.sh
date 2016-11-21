@@ -1,4 +1,98 @@
-#!/usr/bin/env bash
+modules="$modules extra"
+commands="$commands profile generation"
+
+shopt -s extglob
+
+#TODO
+profile()
+{
+  commands="list->profile_list
+            create->profile_create
+	    delete->profile_delete
+	    switch->profile_switch"
+  flags=""
+  default_command="profile_help"
+  process "$@"
+}
+
+profile_help()
+{
+cat << EOF
+usage: nixy profile (lsit|create|delete|switch) [options]... [argument]
+
+These are some common Nix commands used to manipulate user profiles:
+
+
+EOF
+}
+
+profile_list()
+{
+  # if [ "${#}" -gt 0 ]; then
+  #   echo -e "\e[1;31merror:\e[0m no arguments expected"
+  #   exit 1
+  # fi
+  
+  for profile in /nix/var/nix/profiles/*; do
+    profile=$(basename "${profile}")
+    if [ "${profile}" != "per-user" ] && [ "${profile}" != "system" ]; then
+      # Ignore profile generations
+      if grep -qv '\-[0-9]*-link' <<< $profile; then
+	echo " "${profile}
+      fi
+    fi
+  done; unset profile
+
+  for profile in /nix/var/nix/profiles/per-user/"${USER}"/*; do
+    profile=$(basename "${profile}")
+    if grep -qv '\-[0-9]*-link' <<< $profile; then
+      echo " "${profile}
+    fi
+  done; unset profile
+}
+
+profile_create()
+{
+  packages="nix"
+  if [ "$(uname -s).$(uname -m)" = "Darwin.x86_64" ]; then
+    packages="${packages} nss-cacert" # Add SSL certs for Darwin
+  fi
+
+  if [ -n "${1}" ] \
+  && [ ! -d /nix/var/nix/profiles/"${1}" ]; then
+    echo "creating profile ${1}"
+    nix-env -i ${packages} -p /nix/var/nix/profiles/"${1}" 2> /dev/null
+  fi
+  unset packages
+}
+
+profile_delete()
+{
+  current=$(basename $(readlink ~/.nix-profile))
+
+  # Input validation. Don't delete the default or current profile.
+  if [ "${1}" != "default" ] \
+  && [ "${1}" != "${current}" ] \
+  && [ -n "${1}" ] \
+  && [ -d /nix/var/nix/profiles/"${1}" ]; then
+    echo "deleting profile ${1}"
+    rm -rf /nix/var/nix/profiles/"${1}"{,-*([0-9])-link}
+  fi
+}
+
+profile_switch()
+{
+  current=$(basename $(readlink ~/.nix-profile))
+
+  if [ -n "${1}" ] \
+  && [ "${1}" != "${current}" ] \
+  && [ -d /nix/var/nix/profiles/"${1}" ]; then
+    echo "switching profiles from ${current} to ${1}"
+    nix-env --switch-profile /nix/var/nix/profiles/"${1}"
+  fi
+  unset current
+}
+
 
 # Modules
 #   Profiles
@@ -21,84 +115,23 @@
 #   garbage-collect    Removes packages that aren't used by any generation
 
 
-
-
-# List all the available profiles in the nix store.
-# Arguments: None
-# Returns:   A list of available profiles
-list_profiles()
+generation()
 {
-  if [ "$#" -gt 0 ]; then
-	  echo -e "\e[1;31merror:\e[0m no arguments expected"
-	  exit 1
-  fi
-
-  local profile
-
-  for profile in /nix/var/nix/profiles/*; do
-    profile=$(basename "${profile}")
-    if [ "${profile}" != per-user ]; then
-      # Ignore profile generations
-      grep -v '\-[0-9]*-link' <<< $profile
-    fi
-  done
+  commands="list->generation_list
+            rollback->generation_rollback
+	    delete->generation_delete
+	    switch->generation_switch"
+  flags=""
+  default_command="generation_help"
+  process "$@"
 }
 
-# Creates a new profile by installing the minimal set of packages to have a
-# working nix environment.
-# Arguments: The name of the profile to create
-# Returns:   A message confirming the creation of the profile
-create_profile()
-{
-  local packages="nix"
-  if [ "$(uname -s).$(uname -m)" = "Darwin.x86_64" ]; then
-    packages+=" nss-cacert" # Add SSL certs for Darwin
-  fi
-
-  if [ -n "$1" ] \
-  && [ ! -d /nix/var/nix/profiles/"$1" ]; then
-    echo "creating profile $1"
-    nix-env -i ${packages} -p /nix/var/nix/profiles/"$1" 2> /dev/null
-  fi
-}
-
-# Deletes a profile by deleting all generations of its profile in the nix store.
-# Arguments: The name of the profile to delete
-# Returns:   A message confirming the deletion of the profile
-delete_profile()
-{
-  local current=$(basename $(readlink ~/.nix-profile))
-
-  # Input validation. Don't delete the default or current profile.
-  if [ "$1" != "default" ] \
-  && [ "$1" != "${current}" ] \
-  && [ -n "$1" ] \
-  && [ -d /nix/var/nix/profiles/"$1" ]; then
-    echo "deleting profile $1"
-    rm -rf /nix/var/nix/profiles/"$1"{,-*([0-9])-link}
-  fi
-}
-
-# Switches profiles
-# Arguments: The name of the profile to switch to
-# Returns:   A message confirming the profile switch
-switch_profile()
-{
-  local current=$(basename $(readlink ~/.nix-profile))
-
-  if [ -n "$1" ] \
-  && [ "$1" != "${current}" ] \
-  && [ -d /nix/var/nix/profiles/"$1" ]; then
-    echo "switching profiles from ${current} to $1"
-    nix-env --switch-profile /nix/var/nix/profiles/"$1"
-  fi
-}
 
 # Lists all generations of the current profile
 # All input validation is handled by $(nix-env --list-generations)
 # Arguments: None
 # Returns:   A listing of all generations of the current profile.
-list_generations()
+generation_list()
 {
   nix-env --list-generations
 }
@@ -107,7 +140,7 @@ list_generations()
 # All input validation is handled by $(nix-env --switch-generations)
 # Arguments: The number of the generation to switch to.
 # Returns:   A message confirming the switch.
-switch_generation()
+generation_switch()
 {
   nix-env --switch-generation "$@"
 }
@@ -116,7 +149,7 @@ switch_generation()
 # All input validation is handled by $(nix-env --delete-generations)
 # Arguments: The number of the generation to delete.
 # Returns:   A message confirming the deletion.
-delete_generation()
+generation_delete()
 {
   nix-env --delete-generations "$@"
 }
@@ -124,18 +157,9 @@ delete_generation()
 # Switches to previous generation of the current profile
 # Arguments: None
 # Returns:   A message confirming the switch.
-rollback_generation()
+generation_rollback()
 {
   nix-env --rollback
-}
-
-#{- garbage_collection -}#
-# Removes all packages that aren't currently in any generations of a profile.
-# Arguments: A list of arguments to pass to $(nix-collect-garbage) in no particular order.
-# Returns:   The unmodified output of nix-collect-garbage
-garbage_collection()
-{
-  nix-collect-garbage "$@"
 }
 
 

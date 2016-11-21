@@ -1,7 +1,8 @@
 is_valid_command()
 {
-  for valid_command in "${commands[@]}"; do
-    if [ "$1" = "$valid_command" ]; then
+  for valid_command in ${commands}; do
+    if [ "${1}" = "${valid_command%->*}" ]; then
+      echo "${valid_command#*->}"
       return 0
     fi
   done; unset valid_command
@@ -10,40 +11,43 @@ is_valid_command()
 
 is_valid_flag()
 {
-  for valid_flag in "${flags[@]}"; do
-    if [ "$1" = "$valid_flag" ]; then
+  for valid_flag in ${flags}; do
+    if [ "${1}" = "${valid_flag%->*}" ]; then
+      echo "${valid_flag#*->}"
       return 0
     fi
   done; unset valid_flag
   return 1
 }
 
+#TODO: Posix Shell compliance
 process()
 {
-  declare command=""
+  command=""
   declare -a arguments=()
+  # arguments=""
 
   if [ "$#" -eq 0 ]; then
-    #TODO
     "${default_command:-:}"
     return
   fi
 
   for argument in "$@"; do
-    if ! [ "$command" ] && is_valid_command "$argument"; then
-      command="$argument"
+    if ! [ "$command" ] \
+    && test=$(is_valid_command "$argument"); then
+      command="${test}"
     elif is_valid_flag "$argument"; then
       "$argument"
     else
       arguments+=("$argument")
-    fi
+    fi; unset test
   done; unset argument
 
   if [ "$command" ]; then
     "$command" "${arguments[@]}"
+    # "${command}" ${arguments}
     return
   else
-    #TODO
     "${default_command:-:}"
     return
   fi
