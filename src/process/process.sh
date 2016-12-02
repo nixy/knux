@@ -53,4 +53,4 @@ process()
   fi
 }
 
-process "$@"
+#process "$@"
