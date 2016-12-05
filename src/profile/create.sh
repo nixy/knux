@@ -1,3 +1,8 @@
+# Create a new Nix profile.
+# Arguments: The name of the profile to create. If no name is given, then don't
+#            create any profiles.
+# Effects:   Create a new profile in the Nix store.
+# Returns:
 profile_create()
 {
   packages="nix"

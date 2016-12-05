@@ -1,10 +1,5 @@
 profile_list()
 {
-  # if [ "${#}" -gt 0 ]; then
-  #   echo -e "\e[1;31merror:\e[0m no arguments expected"
-  #   exit 1
-  # fi
-  
   for profile in /nix/var/nix/profiles/*; do
     profile=$(basename "${profile}")
     if [ "${profile}" != "per-user" ] && [ "${profile}" != "system" ]; then

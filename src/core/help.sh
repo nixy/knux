@@ -1,7 +1,7 @@
 help()
 {
   cat << EOF
-usage: nixy command [options]... [arguments]...
+usage: nixy (command) [options]... [arguments]...
 
 CLI for the Nix package manager.
 

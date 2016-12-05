@@ -1,8 +1,12 @@
 # Lists all generations of the current profile
-# All input validation is handled by $(nix-env --list-generations)
 # Arguments: None
-# Returns:   A listing of all generations of the current profile.
+# Effects:   None
+# Returns:   A list of all generations of the current profile.
 generation_list()
 {
-  nix-env --list-generations
+  if [ "${#}" -gt 0 ]; then
+    echo -e "\033[1;31merror:\033[0m no arguments expected"
+  else
+    nix-env --list-generations
+  fi
 }

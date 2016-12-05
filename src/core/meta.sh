@@ -7,5 +7,7 @@ commands="$commands
 	  update
 	  upgrade
 	  garbage-collect->garbage_collect
+	  build
+	  shell
 	  help"
 default_command="help"

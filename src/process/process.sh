@@ -48,7 +48,9 @@ process()
     # "${command}" ${arguments}
     return
   else
-    "${default_command:-:}"
+    #"${default_command:-:}"
+    echo -e "\033[1;31merror:\033[0m no operation specified"
+	echo "try $(basename $0) help for more information"
     return
   fi
 }

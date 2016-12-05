@@ -1,8 +1,12 @@
-# Switches to another generation of the current profile
-# All input validation is handled by $(nix-env --switch-generations)
-# Arguments: The number of the generation to switch to.
+# Switches to a generation of the current profile
+# Arguments: The generation number to switch to.
+# Effect:    Switches to the specified generation of the current profile.
 # Returns:   A message confirming the switch.
 generation_switch()
 {
-  nix-env --switch-generation "$@"
+  if [ "${#}" -ne 1 ]; then
+    echo -e "\033[1;31merror:\033[0m exactly one arguments expected"
+  else
+    nix-env --switch-generation "$@"
+  fi
 }

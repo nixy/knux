@@ -3,7 +3,6 @@ profile_delete()
 {
   current=$(basename $(readlink ~/.nix-profile))
 
-  # Input validation. Don't delete the default or current profile.
   if [ "${1}" != "default" ] \
   && [ "${1}" != "${current}" ] \
   && [ -n "${1}" ] \
