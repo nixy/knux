@@ -19,7 +19,7 @@ remove()
       if [ "${output}" = "(dry run; not doing anything)" ];then
 	echo "${output}" >&2
       fi
-      echo -e '\033[1;31merror:\033[0m no matches found'
+      echo -e "\033[1;31merror:\033[0m selecter '$1' matches no derivations"
       exit 1
     fi
   fi
