@@ -1,11 +1,10 @@
 { nixpkgs ? (import <nixpkgs> {}) }:
 let
   inherit (nixpkgs) stdenv bash;
+  version = "0.1.0";
 in 
   nixpkgs.stdenv.mkDerivation {
-    name = "nixy";
-    version = "0.1.0";
-
+    name = "nixy-${version}";
     src = ./.;
 
     installPhase = ''
