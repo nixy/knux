@@ -15,6 +15,8 @@ Basic commands:
   upgrade - installs newer versions of packages into the current profile
 
   garbage-collect - removes old packages no longer referenced by active profiles
+
+  generation - manage generations of the current profile
 EOF
   exit 0
 }
