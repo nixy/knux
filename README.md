@@ -32,9 +32,7 @@ workflow for something like writing golang packages.
 
 ## Installing it
 
-Currently the project is just a bash script that is composed using make. Running
-make should output the complete script as bin/nixy, which you can then put
-somewhere in your path to use.
+Nixy isn't in nixpkgs yet, but this repository includes a Nix expression for it.
+You can install it into your profile using this command:
 
-I am currently working on a more complete makefile to support installation and
-getting a Nix expression finished up.
+	nix-env -f . -i
