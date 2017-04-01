@@ -1,5 +1,5 @@
 BINDIR := bin
-BINARY := nixy
+BINARY := knux
 OBJDIR := obj
 OBJS := $(addprefix $(OBJDIR)/,core.sh profile.sh process.sh generation.sh)
 

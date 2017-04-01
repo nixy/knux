@@ -4,12 +4,12 @@ let
   version = "0.1.0";
 in 
   nixpkgs.stdenv.mkDerivation {
-    name = "nixy-${version}";
+    name = "knux-${version}";
     src = ./.;
 
     installPhase = ''
       mkdir -p $out/bin;
-      cp bin/nixy $out/bin;
+      cp bin/knux $out/bin;
     '';
 
     meta = {
