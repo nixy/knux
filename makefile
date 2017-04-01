@@ -22,7 +22,7 @@ $(BINDIR)/$(BINARY): $(OBJS) | $(BINDIR)
 	  cat $$file >> $@;\
 	  echo >> $@;\
 	done
-	echo 'process "$$@"' >> $@
+	echo 'profproc "$$@"' >> $@
 	chmod +x $@
 
 $(BINDIR):

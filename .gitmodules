@@ -1,0 +1,3 @@
+[submodule "lib/professor-processor"]
+	path = lib/professor-processor
+	url = https://github.com/nixy/professor-processor
